@@ -1,29 +1,32 @@
-use evdev::{AbsoluteAxisCode, Device, KeyCode};
+use evdev::Device;
+use gmpad::gamepad::Gamepad;
 use std::os::unix::fs::FileTypeExt;
-use tracing::{error, info, level_filters::LevelFilter, warn};
-use tracing_subscriber::EnvFilter;
+use tracing::{error, info, warn};
+use tracing_subscriber::{EnvFilter, fmt};
 
 fn main() {
-    let tracing_sub = tracing_subscriber::fmt().with_env_filter(
-        EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .from_env_lossy(),
-    );
+    let tracing_filter =
+        EnvFilter::try_from_env("GMPAD_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let tracing_sub = fmt().with_env_filter(tracing_filter);
     tracing_sub.init();
 
     info!("Detecting inputs...");
 
-    let mut input_devices = detect_input_devices().unwrap_or_else(|err| {
-        error!("Failed to get input devices: {}", fmt_err(&err));
+    let devices = detect_input_devices().unwrap_or_else(|err| {
+        error!("Failed to get input devices: {}", gmpad::fmt_err(&err));
         std::process::exit(1);
     });
 
-    let gamepad = input_devices.find(|dev| is_gamepad(dev));
+    let Some(mut gamepad) = Gamepad::from_devices(devices) else {
+        error!("Gamepad not found");
+        std::process::exit(1);
+    };
 
-    if let Some(gp) = gamepad {
-        info!("Found gamepad: {}", gp.name().unwrap_or_else(|| "Unknown"));
-    } else {
-        info!("Gamepad not found");
+    info!("Listening events from {}..", gamepad.name());
+
+    loop {
+        gamepad.update();
     }
 }
 
@@ -60,35 +63,4 @@ fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
         });
 
     Ok(iter)
-}
-
-fn fmt_err(err: &anyhow::Error) -> String {
-    err.chain()
-        .map(|e| e.to_string())
-        .collect::<Vec<_>>()
-        .join(": ")
-}
-
-fn is_gamepad(dev: &Device) -> bool {
-    let keys = match dev.supported_keys() {
-        Some(k) => k,
-        None => return false,
-    };
-
-    let axes = match dev.supported_absolute_axes() {
-        Some(a) => a,
-        None => return false,
-    };
-
-    // Check for common gamepad buttons
-    let has_buttons = keys.contains(KeyCode::BTN_SOUTH) || // A
-        keys.contains(KeyCode::BTN_EAST)  || // B
-        keys.contains(KeyCode::BTN_NORTH) || // X
-        keys.contains(KeyCode::BTN_WEST); // Y
-
-    // Check for analog sticks
-    let has_left_stick =
-        axes.contains(AbsoluteAxisCode::ABS_X) && axes.contains(AbsoluteAxisCode::ABS_Y);
-
-    has_buttons && has_left_stick
 }
