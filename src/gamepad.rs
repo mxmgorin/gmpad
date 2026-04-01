@@ -1,6 +1,6 @@
 use crate::hid::VirtualGamepad;
 use evdev::{AbsoluteAxisCode, Device, EventSummary, KeyCode};
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct Gamepad {
     phys_device: Device,
@@ -39,7 +39,11 @@ pub struct GamepadState {
 }
 
 impl Gamepad {
-    pub fn new(device: Device) -> Self {
+    pub fn new(mut device: Device) -> Self {
+        if let Err(e) = device.grab() {
+            warn!("Unable to grab device, continuing but there might be conflicts: {e:?}");
+        }
+
         Self {
             phys_device: device,
             state: Default::default(),
