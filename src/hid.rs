@@ -1,4 +1,4 @@
-use crate::gamepad::GamepadState;
+use crate::{gamepad::GamepadState, handler::GamepadOutput};
 use std::fs::File;
 use tracing::info;
 use uhid_virt::{Bus, CreateParams, UHIDDevice};
@@ -37,27 +37,29 @@ const HID_GAMEPAD_RDESC: &[u8] = &[
     0xC0, // END_COLLECTION
 ];
 
-pub struct VirtualGamepad {
+pub struct HidOutput {
     device: UHIDDevice<File>,
 }
 
-impl Drop for VirtualGamepad {
+impl Drop for HidOutput {
     fn drop(&mut self) {
         let _ = self.device.destroy();
     }
 }
 
-impl VirtualGamepad {
+impl GamepadOutput for HidOutput {
+    fn send(&mut self, state: &GamepadState) {
+        self.device.write(&state.hid_report()).unwrap();
+    }
+}
+
+impl HidOutput {
     pub fn new() -> Result<Self, anyhow::Error> {
         let device = new_hid_gamepad()?;
 
         info!("Created device: {}", GAMEPAD_NAME);
 
         Ok(Self { device })
-    }
-
-    pub fn update(&mut self, state: &GamepadState) {
-        self.device.write(&state.hid_report()).unwrap();
     }
 }
 

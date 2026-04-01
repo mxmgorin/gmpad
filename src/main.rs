@@ -1,5 +1,5 @@
 use evdev::Device;
-use gmpad::{fmt_err, handler::EventHandler};
+use gmpad::{Mode, fmt_err, handler::EventHandler, hid::HidOutput};
 use std::os::unix::fs::FileTypeExt;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
@@ -10,12 +10,14 @@ fn main() {
 
     let tracing_sub = fmt().with_env_filter(tracing_filter);
     tracing_sub.init();
+    let mode = parse_mode();
 
     info!(
-        "Runnning {} v{} (built {})",
+        "Runnning {} v{} (built {}) in mode {:?}",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
-        env!("BUILD_DATE")
+        env!("BUILD_DATE"),
+        mode
     );
 
     let devices = detect_input_devices().unwrap_or_else(|err| {
@@ -23,14 +25,41 @@ fn main() {
         std::process::exit(1);
     });
     let mut handler = match EventHandler::from_devices(devices) {
-        Ok(handler) => handler,
+        Ok(x) => x,
         Err(err) => {
             error!("{}", fmt_err(&err));
             std::process::exit(1);
         }
     };
+    let output = match mode {
+        Mode::Local => match HidOutput::new() {
+            Ok(x) => x,
+            Err(err) => {
+                error!("{}", fmt_err(&err));
+                std::process::exit(1);
+            }
+        },
+        Mode::Remote => todo!(),
+    };
 
-    handler.start();
+    handler.run(output);
+}
+
+fn parse_mode() -> Mode {
+    let arg = std::env::args().nth(1).unwrap_or_else(|| {
+        eprintln!("Usage: gmpad [local|remote]");
+        std::process::exit(1);
+    });
+
+    match arg.as_str() {
+        "local" => Mode::Local,
+        "remote" => Mode::Remote,
+        _ => {
+            eprintln!("Invalid mode: {arg}");
+            eprintln!("Usage: gmpad [local|remote]");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {

@@ -1,14 +1,14 @@
-use crate::{
-    gamepad::{GamepadState, is_gamepad, normalize_axis},
-    hid::VirtualGamepad,
-};
+use crate::gamepad::{GamepadState, is_gamepad, normalize_axis};
 use evdev::{AbsoluteAxisCode, Device, EventSummary, KeyCode};
 use tracing::{debug, info, warn};
 
+pub trait GamepadOutput {
+    fn send(&mut self, state: &GamepadState);
+}
+
 pub struct EventHandler {
-    phys_device: Device,
+    device: Device,
     state: GamepadState,
-    virt_gamepad: VirtualGamepad,
 }
 
 impl EventHandler {
@@ -18,9 +18,8 @@ impl EventHandler {
         }
 
         Ok(Self {
-            phys_device: device,
+            device,
             state: Default::default(),
-            virt_gamepad: VirtualGamepad::new()?,
         })
     }
 
@@ -32,22 +31,24 @@ impl EventHandler {
         Self::from_device(gamepad)
     }
 
-    pub fn start(&mut self) {
-        info!("Listening events from {}..", self.phys_device_name());
+    pub fn run(&mut self, mut output: impl GamepadOutput) {
+        info!("Listening events from {}..", self.device_name());
 
         loop {
-            self.update();
+            if self.update() {
+                output.send(&self.state);
+            }
         }
     }
 
-    pub fn phys_device_name(&self) -> &str {
-        self.phys_device.name().unwrap_or_else(|| "Unknown")
+    pub fn device_name(&self) -> &str {
+        self.device.name().unwrap_or_else(|| "Unknown")
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> bool {
         let mut updated = false;
 
-        for event in self.phys_device.fetch_events().unwrap() {
+        for event in self.device.fetch_events().unwrap() {
             match event.destructure() {
                 EventSummary::Key(_, code, value) => {
                     let pressed = value != 0;
@@ -95,8 +96,6 @@ impl EventHandler {
             }
         }
 
-        if updated {
-            self.virt_gamepad.update(&self.state);
-        }
+        updated
     }
 }
