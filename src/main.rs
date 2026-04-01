@@ -1,5 +1,4 @@
-use anyhow::Context;
-use evdev::Device;
+use evdev::{AbsoluteAxisCode, Device, KeyCode};
 use std::os::unix::fs::FileTypeExt;
 use tracing::{error, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
@@ -14,23 +13,21 @@ fn main() {
 
     info!("Detecting inputs...");
 
-    let input_devices = detect_input_devices().unwrap_or_else(|err| {
+    let mut input_devices = detect_input_devices().unwrap_or_else(|err| {
         error!("Failed to get input devices: {}", fmt_err(&err));
         std::process::exit(1);
     });
 
-    for device in input_devices {
-        match device {
-            Ok(device) => info!(
-                "Found device {}",
-                device.name().unwrap_or_else(|| "Unknown")
-            ),
-            Err(err) => warn!("Can't open device {}", fmt_err(&err)),
-        }
+    let gamepad = input_devices.find(|dev| is_gamepad(dev));
+
+    if let Some(gp) = gamepad {
+        info!("Found gamepad: {}", gp.name().unwrap_or_else(|| "Unknown"));
+    } else {
+        info!("Gamepad not found");
     }
 }
 
-fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = anyhow::Result<Device>>> {
+fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
     let iter = std::fs::read_dir("/dev/input")?
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
@@ -40,13 +37,27 @@ fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = anyhow::Result<
             }
 
             let filename = entry.file_name().into_string().ok()?;
+
             if !filename.starts_with("event") {
                 return None;
             }
 
             Some(entry.path())
         })
-        .map(|path| Device::open(&path).with_context(|| format!("{}", path.display())));
+        .filter_map(|path| match Device::open(&path) {
+            Ok(dev) => {
+                info!(
+                    "Found input device {}",
+                    dev.name().unwrap_or_else(|| "Unknown")
+                );
+                Some(dev)
+            }
+
+            Err(err) => {
+                warn!("Can't open input device {}: {}", path.display(), err);
+                None
+            }
+        });
 
     Ok(iter)
 }
@@ -56,4 +67,28 @@ fn fmt_err(err: &anyhow::Error) -> String {
         .map(|e| e.to_string())
         .collect::<Vec<_>>()
         .join(": ")
+}
+
+fn is_gamepad(dev: &Device) -> bool {
+    let keys = match dev.supported_keys() {
+        Some(k) => k,
+        None => return false,
+    };
+
+    let axes = match dev.supported_absolute_axes() {
+        Some(a) => a,
+        None => return false,
+    };
+
+    // Check for common gamepad buttons
+    let has_buttons = keys.contains(KeyCode::BTN_SOUTH) || // A
+        keys.contains(KeyCode::BTN_EAST)  || // B
+        keys.contains(KeyCode::BTN_NORTH) || // X
+        keys.contains(KeyCode::BTN_WEST); // Y
+
+    // Check for analog sticks
+    let has_left_stick =
+        axes.contains(AbsoluteAxisCode::ABS_X) && axes.contains(AbsoluteAxisCode::ABS_Y);
+
+    has_buttons && has_left_stick
 }
