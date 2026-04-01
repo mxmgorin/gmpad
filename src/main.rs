@@ -11,6 +11,13 @@ fn main() {
     let tracing_sub = fmt().with_env_filter(tracing_filter);
     tracing_sub.init();
 
+    info!(
+        "Runnning {} v{} (built {})",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        env!("BUILD_DATE")
+    );
+
     info!("Detecting inputs...");
 
     let devices = detect_input_devices().unwrap_or_else(|err| {
