@@ -18,8 +18,6 @@ fn main() {
         env!("BUILD_DATE")
     );
 
-    info!("Detecting inputs...");
-
     let devices = detect_input_devices().unwrap_or_else(|err| {
         error!("Failed to get input devices: {}", gmpad::fmt_err(&err));
         std::process::exit(1);
@@ -38,6 +36,8 @@ fn main() {
 }
 
 fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
+    info!("Detecting inputs devices...");
+
     let iter = std::fs::read_dir("/dev/input")?
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
