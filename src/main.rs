@@ -1,5 +1,5 @@
 use evdev::Device;
-use gmpad::gamepad::Gamepad;
+use gmpad::{fmt_err, handler::EventHandler};
 use std::os::unix::fs::FileTypeExt;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
@@ -19,20 +19,18 @@ fn main() {
     );
 
     let devices = detect_input_devices().unwrap_or_else(|err| {
-        error!("Failed to get input devices: {}", gmpad::fmt_err(&err));
+        error!("Failed to get input devices: {}", fmt_err(&err));
         std::process::exit(1);
     });
-
-    let Some(mut gamepad) = Gamepad::from_devices(devices) else {
-        error!("Gamepad not found");
-        std::process::exit(1);
+    let mut handler = match EventHandler::from_devices(devices) {
+        Ok(handler) => handler,
+        Err(err) => {
+            error!("{}", fmt_err(&err));
+            std::process::exit(1);
+        }
     };
 
-    info!("Listening events from {}..", gamepad.name());
-
-    loop {
-        gamepad.update();
-    }
+    handler.start();
 }
 
 fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
@@ -57,7 +55,7 @@ fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
         .filter_map(|path| match Device::open(&path) {
             Ok(dev) => {
                 info!(
-                    "Found input device {}",
+                    "Found input device: {}",
                     dev.name().unwrap_or_else(|| "Unknown")
                 );
                 Some(dev)

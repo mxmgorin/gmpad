@@ -1,7 +1,9 @@
 use crate::gamepad::GamepadState;
 use std::fs::File;
+use tracing::info;
 use uhid_virt::{Bus, CreateParams, UHIDDevice};
 
+const GAMEPAD_NAME: &str = "virtual-xbox-gamepad";
 const HID_GAMEPAD_RDESC: &[u8] = &[
     0x05, 0x01, // USAGE_PAGE (Generic Desktop)
     0x09, 0x05, // USAGE (Game Pad)
@@ -47,9 +49,11 @@ impl Drop for VirtualGamepad {
 
 impl VirtualGamepad {
     pub fn new() -> Result<Self, anyhow::Error> {
-        Ok(Self {
-            device: new_hid_gamepad()?,
-        })
+        let device = new_hid_gamepad()?;
+
+        info!("Created device: {}", GAMEPAD_NAME);
+
+        Ok(Self { device })
     }
 
     pub fn update(&mut self, state: &GamepadState) {
@@ -59,7 +63,7 @@ impl VirtualGamepad {
 
 fn new_hid_gamepad() -> Result<UHIDDevice<File>, anyhow::Error> {
     let create_params = CreateParams {
-        name: "virtual-xbox-gamepad".to_string(),
+        name: GAMEPAD_NAME.to_string(),
         phys: "".to_string(),
         uniq: "".to_string(),
         bus: Bus::USB,
