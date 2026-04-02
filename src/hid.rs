@@ -66,11 +66,11 @@ impl HidOutput {
 fn new_hid_gamepad() -> Result<UHIDDevice<File>, anyhow::Error> {
     let create_params = CreateParams {
         name: GAMEPAD_NAME.to_string(),
-        phys: "".to_string(),
-        uniq: "".to_string(),
-        bus: Bus::USB,
-        vendor: 0x045e,
-        product: 0x028e,
+        phys: "bluetooth/input0".to_string(),
+        uniq: "00:11:22:33:44:55".to_string(),
+        bus: Bus::BLUETOOTH,
+        vendor: 0x045e,  // Microsoft
+        product: 0x028e, // Xbox 360 controller
         version: 0,
         country: 0,
         rd_data: HID_GAMEPAD_RDESC.to_vec(),
