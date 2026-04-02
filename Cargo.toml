@@ -9,3 +9,6 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.20", features = [ "env-filter" ] }
 evdev = "0.13.2"
 uhid-virt = "0.0.8"
+bluer = { version = "0.17.4", features = ["bluetoothd"] }
+zbus = "5.14.0"
+tokio = { version = "1.50.0", features = ["full"] }

@@ -1,10 +1,11 @@
 use evdev::Device;
-use gmpad::{Mode, fmt_err, handler::EventHandler, hid::HidOutput};
+use gmpad::{Mode, bluetooth::BluetoothOutput, fmt_err, handler::EventHandler, hid::HidOutput};
 use std::os::unix::fs::FileTypeExt;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let tracing_filter =
         EnvFilter::try_from_env("GMPAD_LOG_LEVEL").unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -31,18 +32,23 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let output = match mode {
+
+    match mode {
         Mode::Local => match HidOutput::new() {
-            Ok(x) => x,
+            Ok(x) => handler.run(x),
             Err(err) => {
                 error!("{}", fmt_err(&err));
                 std::process::exit(1);
             }
         },
-        Mode::Remote => todo!(),
+        Mode::Remote => match BluetoothOutput::new().await {
+            Ok(x) => handler.run(x),
+            Err(err) => {
+                error!("{}", fmt_err(&err));
+                std::process::exit(1);
+            }
+        },
     };
-
-    handler.run(output);
 }
 
 fn parse_mode() -> Mode {
