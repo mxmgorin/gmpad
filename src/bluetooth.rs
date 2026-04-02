@@ -61,7 +61,6 @@ const SDP_XML: &str = r#"
 pub struct BluetoothOutput {
     //interrupt: std::fs::File,
     _adapter: Adapter,
-    _agent: AgentHandle,
 }
 
 impl GamepadOutput for BluetoothOutput {
@@ -82,14 +81,12 @@ impl BluetoothOutput {
         let session = Session::new().await?;
         let adapter = setup_adapter(&session).await?;
         set_device_class();
-        let agent = setup_agent(&session).await?;
         register_sdp().await?;
 
         println!("Bluetooth HID device ready");
 
         Ok(Self {
             _adapter: adapter,
-            _agent: agent,
         })
     }
 }
@@ -116,16 +113,6 @@ fn set_device_class() {
         .args(["hci0", "class", "0x002508"]) // Gamepad
         .status()
         .expect("failed to set class");
-}
-
-use bluer::agent::{Agent, AgentHandle};
-
-async fn setup_agent(session: &Session) -> anyhow::Result<AgentHandle> {
-    let agent = Agent::default();
-    let handle = session.register_agent(agent).await?;
-    println!("Agent registered");
-
-    Ok(handle)
 }
 
 use zbus::Connection;
