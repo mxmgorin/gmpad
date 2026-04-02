@@ -29,7 +29,7 @@ const SDP_XML: &str = r#"
   </attribute>
 
   <attribute id="0x0100">
-    <text value="Rust Gamepad"/>
+    <text value="gmpad"/>
   </attribute>
 
   <attribute id="0x0202">
@@ -80,14 +80,12 @@ impl BluetoothOutput {
     pub async fn new() -> anyhow::Result<Self> {
         let session = Session::new().await?;
         let adapter = setup_adapter(&session).await?;
-        set_device_class();
+        set_device_class()?;
         register_sdp().await?;
 
-        println!("Bluetooth HID device ready");
+        info!("Bluetooth HID device ready");
 
-        Ok(Self {
-            _adapter: adapter,
-        })
+        Ok(Self { _adapter: adapter })
     }
 }
 
@@ -108,24 +106,25 @@ async fn setup_adapter(session: &Session) -> anyhow::Result<Adapter> {
 
 use std::process::Command;
 
-fn set_device_class() {
-    Command::new("hciconfig")
+fn set_device_class() -> anyhow::Result<()> {
+    let status = Command::new("hciconfig")
         .args(["hci0", "class", "0x002508"]) // Gamepad
-        .status()
-        .expect("failed to set class");
+        .status()?;
+
+    info!("Set device class: {}", status);
+
+    Ok(())
 }
 
 use zbus::Connection;
 
 async fn register_sdp() -> anyhow::Result<()> {
     let conn = Connection::system().await?;
-
     let proxy =
         zbus::Proxy::new(&conn, "org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1").await?;
-
     let handle: u32 = proxy.call("AddRecord", &(SDP_XML)).await?;
 
-    println!("SDP record registered: handle={}", handle);
+    info!("SDP record registered: handle={}", handle);
 
     Ok(())
 }
