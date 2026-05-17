@@ -1,10 +1,16 @@
-.PHONY: run
+.PHONY: run run-local run-remote build-aarch64 cross-aarch64 cross-aarch64-remote build-armv7
 
-BIN   := target/debug/input-hub
+BIN := target/debug/gmpad
 
-run:
+run: run-local
+
+run-local:
 	cargo build
-	sudo ./${BIN}
+	sudo ./${BIN} local
+
+run-remote:
+	cargo build
+	sudo ./${BIN} remote
 
 AARCH64_TARGET := aarch64-unknown-linux-gnu
 AARCH64_CC := aarch64-linux-gnu-gcc
@@ -27,8 +33,18 @@ build-aarch64:
 	cargo build --release \
 		--target=$(AARCH64_TARGET)
 
+# Default cross-build (host -> aarch64). Builds with all features — requires
+# libclang>=9 in the cross container for uhid-virt/bindgen.
 cross-aarch64:
-	cross build --target aarch64-unknown-linux-gnu --release
+	cross build --target $(AARCH64_TARGET) --release
+
+# Remote-only cross-build. Skips uhid-virt (and its bindgen build script),
+# producing a Bluetooth-HID-capable binary suitable for handhelds (Trimui
+# Smart Pro, RG35XX, etc.). This is the recommended target until the cross
+# container ships a newer libclang.
+cross-aarch64-remote:
+	cross build --target $(AARCH64_TARGET) --release \
+		--no-default-features --features remote
 
 build-armv7:
 	CC_armv7_unknown_linux_gnueabihf=$(ARMV7_CC) \
@@ -37,4 +53,4 @@ build-armv7:
 	RUSTFLAGS="-C linker=$(ARMV7_CC)" \
 	PKG_CONFIG_ALLOW_CROSS=1 \
 	cargo build --release \
-		--target=$(ARMV7_TARGET) \
+		--target=$(ARMV7_TARGET)

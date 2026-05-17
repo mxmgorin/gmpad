@@ -3,12 +3,18 @@ name = "gmpad"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["local", "remote"]
+local = ["dep:uhid-virt"]
+remote = ["dep:bluer", "dep:zbus"]
+
 [dependencies]
 anyhow = "1.0.101"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.20", features = [ "env-filter" ] }
 evdev = "0.13.2"
-uhid-virt = "0.0.8"
-bluer = { version = "0.17.4", features = ["bluetoothd"] }
-zbus = "5.14.0"
 tokio = { version = "1.50.0", features = ["full"] }
+
+uhid-virt = { version = "0.0.8", optional = true }
+bluer = { version = "0.17.4", features = ["bluetoothd", "l2cap", "rfcomm"], optional = true }
+zbus = { version = "5.14.0", optional = true }

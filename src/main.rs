@@ -1,8 +1,11 @@
 use evdev::Device;
-use gmpad::{Mode, bluetooth::BluetoothOutput, fmt_err, handler::EventHandler, hid::HidOutput};
+use gmpad::{Mode, fmt_err, handler::EventHandler};
 use std::os::unix::fs::FileTypeExt;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
+
+#[cfg(not(any(feature = "local", feature = "remote")))]
+compile_error!("Enable at least one of the features: `local`, `remote`.");
 
 #[tokio::main]
 async fn main() {
@@ -14,7 +17,7 @@ async fn main() {
     let mode = parse_mode();
 
     info!(
-        "Runnning {} v{} (built {}) in mode {:?}",
+        "Running {} v{} (built {}) in mode {:?}",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         env!("BUILD_DATE"),
@@ -34,14 +37,16 @@ async fn main() {
     };
 
     match mode {
-        Mode::Local => match HidOutput::new() {
+        #[cfg(feature = "local")]
+        Mode::Local => match gmpad::hid::HidOutput::new() {
             Ok(x) => handler.run(x),
             Err(err) => {
                 error!("{}", fmt_err(&err));
                 std::process::exit(1);
             }
         },
-        Mode::Remote => match BluetoothOutput::new().await {
+        #[cfg(feature = "remote")]
+        Mode::Remote => match gmpad::bluetooth::BluetoothOutput::new().await {
             Ok(x) => handler.run(x),
             Err(err) => {
                 error!("{}", fmt_err(&err));
@@ -51,25 +56,36 @@ async fn main() {
     };
 }
 
+fn usage() -> &'static str {
+    match (cfg!(feature = "local"), cfg!(feature = "remote")) {
+        (true, true) => "Usage: gmpad [local|remote]",
+        (true, false) => "Usage: gmpad local",
+        (false, true) => "Usage: gmpad remote",
+        (false, false) => "Usage: gmpad (no modes enabled at build time)",
+    }
+}
+
 fn parse_mode() -> Mode {
     let arg = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: gmpad [local|remote]");
+        eprintln!("{}", usage());
         std::process::exit(1);
     });
 
     match arg.as_str() {
+        #[cfg(feature = "local")]
         "local" => Mode::Local,
+        #[cfg(feature = "remote")]
         "remote" => Mode::Remote,
         _ => {
             eprintln!("Invalid mode: {arg}");
-            eprintln!("Usage: gmpad [local|remote]");
+            eprintln!("{}", usage());
             std::process::exit(1);
         }
     }
 }
 
 fn detect_input_devices() -> anyhow::Result<impl Iterator<Item = Device>> {
-    info!("Detecting inputs devices...");
+    info!("Detecting input devices...");
 
     let iter = std::fs::read_dir("/dev/input")?
         .filter_map(|entry| entry.ok())
